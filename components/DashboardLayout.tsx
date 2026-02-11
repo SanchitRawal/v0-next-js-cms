@@ -5,12 +5,14 @@ import React from 'react'
 import { useAuth } from '@/lib/authContext'
 import { Sidebar } from './Sidebar'
 import { Header } from './Header'
+import { useSidebar } from '@/lib/sidebarContext'
 import { useRouter } from 'next/navigation'
 import { useEffect } from 'react'
 import { Loader2 } from 'lucide-react'
 
 export function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth()
+  const { isCollapsed } = useSidebar()
   const router = useRouter()
 
   useEffect(() => {
@@ -34,7 +36,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex h-screen bg-background">
       <Sidebar />
-      <div className="flex-1 flex flex-col">
+      <div className={`flex-1 flex flex-col transition-all duration-300 ${isCollapsed ? 'md:ml-20' : 'md:ml-64'}`}>
         <Header />
         <main className="flex-1 overflow-auto">
           <div className="px-4 md:px-8 py-8">
