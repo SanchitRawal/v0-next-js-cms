@@ -2,7 +2,7 @@
 
 import React, { createContext, useContext, useEffect, useState } from 'react'
 
-type Theme = 'light' | 'dark' | 'system'
+export type Theme = 'light' | 'dark' | 'system'
 
 interface ThemeContextType {
   theme: Theme
@@ -12,55 +12,74 @@ interface ThemeContextType {
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined)
 
+function getSystemTheme(): 'light' | 'dark' {
+  if (typeof window === 'undefined') return 'dark'
+  return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+}
+
+function getResolvedTheme(theme: Theme): 'light' | 'dark' {
+  if (theme === 'system') {
+    return getSystemTheme()
+  }
+  return theme
+}
+
+function applyThemeToDocument(resolvedTheme: 'light' | 'dark') {
+  const htmlElement = document.documentElement
+  if (resolvedTheme === 'dark') {
+    htmlElement.classList.add('dark')
+  } else {
+    htmlElement.classList.remove('dark')
+  }
+}
+
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [theme, setThemeState] = useState<Theme>('system')
   const [resolvedTheme, setResolvedTheme] = useState<'light' | 'dark'>('dark')
   const [mounted, setMounted] = useState(false)
 
   useEffect(() => {
-    setMounted(true)
-    // Get saved theme from localStorage
-    const savedTheme = (localStorage.getItem('theme') as Theme) || 'system'
-    setThemeState(savedTheme)
+    try {
+      // Get saved theme from localStorage
+      const savedTheme = (localStorage.getItem('theme') as Theme) || 'system'
+      setThemeState(savedTheme)
 
-    // Apply theme
-    applyTheme(savedTheme)
+      // Resolve and apply theme
+      const resolved = getResolvedTheme(savedTheme)
+      setResolvedTheme(resolved)
+      applyThemeToDocument(resolved)
+    } catch (error) {
+      console.error('[Theme] Failed to initialize theme:', error)
+      applyThemeToDocument('dark')
+    }
+
+    setMounted(true)
   }, [])
 
-  const applyTheme = (themeToApply: Theme) => {
-    const htmlElement = document.documentElement
+  const handleSetTheme = (newTheme: Theme) => {
+    try {
+      setThemeState(newTheme)
+      localStorage.setItem('theme', newTheme)
 
-    let finalTheme: 'light' | 'dark' = 'dark'
-
-    if (themeToApply === 'system') {
-      finalTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
-    } else {
-      finalTheme = themeToApply
+      const resolved = getResolvedTheme(newTheme)
+      setResolvedTheme(resolved)
+      applyThemeToDocument(resolved)
+    } catch (error) {
+      console.error('[Theme] Failed to set theme:', error)
     }
-
-    setResolvedTheme(finalTheme)
-
-    if (finalTheme === 'dark') {
-      htmlElement.classList.add('dark')
-    } else {
-      htmlElement.classList.remove('dark')
-    }
-  }
-
-  const setTheme = (newTheme: Theme) => {
-    setThemeState(newTheme)
-    localStorage.setItem('theme', newTheme)
-    applyTheme(newTheme)
   }
 
   // Listen for system theme changes
   useEffect(() => {
     if (theme !== 'system') return
+    if (typeof window === 'undefined') return
 
     const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)')
 
     const handleChange = () => {
-      applyTheme(theme)
+      const systemTheme = getSystemTheme()
+      setResolvedTheme(systemTheme)
+      applyThemeToDocument(systemTheme)
     }
 
     mediaQuery.addEventListener('change', handleChange)
@@ -71,7 +90,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     return <>{children}</>
   }
 
-  return <ThemeContext.Provider value={{ theme, resolvedTheme, setTheme }}>{children}</ThemeContext.Provider>
+  return <ThemeContext.Provider value={{ theme, resolvedTheme, setTheme: handleSetTheme }}>{children}</ThemeContext.Provider>
 }
 
 export function useTheme() {
