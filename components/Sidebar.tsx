@@ -13,15 +13,21 @@ import {
   LogOut,
   Menu,
   X,
+  Sun,
+  Moon,
+  Monitor,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useAuth } from '@/lib/authContext'
+import { useTheme } from '@/lib/themeContext'
 import { useState } from 'react'
 
 export function Sidebar() {
   const pathname = usePathname()
   const { user, logout } = useAuth()
+  const { theme, setTheme } = useTheme()
   const [open, setOpen] = useState(false)
+  const [showThemeMenu, setShowThemeMenu] = useState(false)
 
   const menuItems = [
     { href: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
@@ -92,6 +98,39 @@ export function Sidebar() {
               <p className="font-medium">{user?.name}</p>
               <p className="text-xs">{user?.role}</p>
             </div>
+            
+            <div className="relative">
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-full justify-start gap-2 bg-transparent"
+                onClick={() => setShowThemeMenu(!showThemeMenu)}
+              >
+                {theme === 'light' ? <Sun size={16} /> : theme === 'dark' ? <Moon size={16} /> : <Monitor size={16} />}
+                {theme.charAt(0).toUpperCase() + theme.slice(1)}
+              </Button>
+
+              {showThemeMenu && (
+                <div className="absolute bottom-full left-0 right-0 mb-2 bg-sidebar rounded-lg border border-sidebar-border shadow-lg overflow-hidden z-50">
+                  {(['light', 'dark', 'system'] as const).map((t) => (
+                    <button
+                      key={t}
+                      onClick={() => {
+                        setTheme(t)
+                        setShowThemeMenu(false)
+                      }}
+                      className={`w-full px-3 py-2 text-sm text-left flex items-center gap-2 ${
+                        theme === t ? 'bg-sidebar-accent text-sidebar-accent-foreground' : 'hover:bg-sidebar-accent/50'
+                      }`}
+                    >
+                      {t === 'light' ? <Sun size={14} /> : t === 'dark' ? <Moon size={14} /> : <Monitor size={14} />}
+                      {t.charAt(0).toUpperCase() + t.slice(1)}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
             <Button
               variant="outline"
               size="sm"
