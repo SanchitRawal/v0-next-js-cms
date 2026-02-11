@@ -1,6 +1,6 @@
 import mongoose from 'mongoose'
 
-const mongoUri = process.env.MONGODB_URI || 'mongodb://localhost:27017/aeroplay-cms'
+const mongoUri = process.env.MONGODB_URI
 
 let cached = global.mongoose as any
 
@@ -9,6 +9,11 @@ if (!cached) {
 }
 
 export async function connectDB() {
+  if (!mongoUri) {
+    console.warn('MONGODB_URI not set. Database operations will be limited.')
+    return null
+  }
+
   if (cached.conn) {
     return cached.conn
   }
@@ -23,13 +28,18 @@ export async function connectDB() {
       .then((mongooseInstance) => {
         return mongooseInstance
       })
+      .catch((e) => {
+        console.error('MongoDB connection failed:', e.message)
+        return null
+      })
   }
 
   try {
     cached.conn = await cached.promise
   } catch (e) {
     cached.promise = null
-    throw e
+    console.error('MongoDB connection error:', e)
+    return null
   }
 
   return cached.conn

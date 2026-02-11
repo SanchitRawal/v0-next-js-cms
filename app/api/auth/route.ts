@@ -1,33 +1,29 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { connectDB } from '@/lib/db'
-import User from '@/lib/models/User'
-import { generateToken, setAuthCookie } from '@/lib/auth'
+import { storage } from '@/lib/storage'
+import { generateToken } from '@/lib/auth'
+import crypto from 'crypto'
+
+function hashPassword(password: string): string {
+  return crypto.createHash('sha256').update(password).digest('hex')
+}
 
 export async function POST(request: NextRequest) {
   try {
     const { action, email, password, name } = await request.json()
 
-    await connectDB()
-
     if (action === 'login') {
-      const user = await User.findOne({ email }).select('+password')
+      const user = storage.getUserByEmail(email)
 
       if (!user) {
         return NextResponse.json({ error: 'Invalid credentials' }, { status: 401 })
       }
 
-      const isPasswordValid = await user.comparePassword(password)
-
-      if (!isPasswordValid) {
+      if (user.password !== hashPassword(password)) {
         return NextResponse.json({ error: 'Invalid credentials' }, { status: 401 })
       }
 
-      if (!user.active) {
-        return NextResponse.json({ error: 'User account is disabled' }, { status: 401 })
-      }
-
       const token = generateToken({
-        userId: user._id.toString(),
+        userId: user.id,
         email: user.email,
         role: user.role,
       })
@@ -35,7 +31,7 @@ export async function POST(request: NextRequest) {
       const response = NextResponse.json({
         success: true,
         user: {
-          id: user._id,
+          id: user.id,
           name: user.name,
           email: user.email,
           role: user.role,
@@ -53,32 +49,35 @@ export async function POST(request: NextRequest) {
     }
 
     if (action === 'signup') {
-      const existingUser = await User.findOne({ email })
+      const existingUser = storage.getUserByEmail(email)
 
       if (existingUser) {
         return NextResponse.json({ error: 'Email already exists' }, { status: 400 })
       }
 
-      const user = await User.create({
-        name,
+      const newUser = {
+        id: crypto.randomUUID(),
+        name: name || email,
         email,
-        password,
-        role: 'editor',
-      })
+        password: hashPassword(password),
+        role: 'editor' as const,
+      }
+
+      storage.addUser(newUser)
 
       const token = generateToken({
-        userId: user._id.toString(),
-        email: user.email,
-        role: user.role,
+        userId: newUser.id,
+        email: newUser.email,
+        role: newUser.role,
       })
 
       const response = NextResponse.json({
         success: true,
         user: {
-          id: user._id,
-          name: user.name,
-          email: user.email,
-          role: user.role,
+          id: newUser.id,
+          name: newUser.name,
+          email: newUser.email,
+          role: newUser.role,
         },
       })
 

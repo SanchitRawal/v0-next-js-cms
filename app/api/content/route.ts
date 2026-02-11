@@ -1,12 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { connectDB } from '@/lib/db'
-import Content from '@/lib/models/Content'
+import { storage } from '@/lib/storage'
 import { verifyToken } from '@/lib/auth'
+import crypto from 'crypto'
 
 export async function GET(request: NextRequest) {
   try {
-    await connectDB()
-
     const { searchParams } = new URL(request.url)
     const type = searchParams.get('type')
     const status = searchParams.get('status')
@@ -15,35 +13,33 @@ export async function GET(request: NextRequest) {
     const page = parseInt(searchParams.get('page') || '1')
     const limit = parseInt(searchParams.get('limit') || '10')
 
-    const query: any = {}
+    let results = storage.getAllContent()
 
-    if (type) query.type = type
-    if (status) query.status = status
-    if (category) query.category = category
+    if (type) results = results.filter((c) => c.type === type)
+    if (status) results = results.filter((c) => c.status === status)
+    if (category) results = results.filter((c) => c.categoryId === category)
 
     if (search) {
-      query.$or = [{ title: { $regex: search, $options: 'i' } }, { description: { $regex: search, $options: 'i' } }]
+      const lowerSearch = search.toLowerCase()
+      results = results.filter(
+        (c) =>
+          c.title.toLowerCase().includes(lowerSearch) || c.description.toLowerCase().includes(lowerSearch)
+      )
     }
 
-    const skip = (page - 1) * limit
+    results.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
 
-    const [content, total] = await Promise.all([
-      Content.find(query)
-        .populate('author', 'name email')
-        .sort({ createdAt: -1 })
-        .skip(skip)
-        .limit(limit),
-      Content.countDocuments(query),
-    ])
+    const skip = (page - 1) * limit
+    const paginatedResults = results.slice(skip, skip + limit)
 
     return NextResponse.json({
       success: true,
-      data: content,
+      data: paginatedResults,
       pagination: {
-        total,
+        total: results.length,
         page,
         limit,
-        pages: Math.ceil(total / limit),
+        pages: Math.ceil(results.length / limit),
       },
     })
   } catch (error) {
@@ -61,16 +57,26 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    await connectDB()
-
     const body = await request.json()
 
-    const content = await Content.create({
-      ...body,
-      author: user.userId,
-    })
+    const newContent = {
+      id: crypto.randomUUID(),
+      title: body.title,
+      description: body.description,
+      content: body.content,
+      type: body.type || 'post',
+      status: body.status || 'draft',
+      categoryId: body.categoryId || '1',
+      authorId: user.userId,
+      featured: body.featured || false,
+      views: 0,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    }
 
-    return NextResponse.json({ success: true, data: content }, { status: 201 })
+    storage.addContent(newContent)
+
+    return NextResponse.json({ success: true, data: newContent }, { status: 201 })
   } catch (error) {
     console.error('Content creation error:', error)
     return NextResponse.json({ error: 'Failed to create content' }, { status: 500 })

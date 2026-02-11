@@ -1,14 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { connectDB } from '@/lib/db'
-import Category from '@/lib/models/Category'
+import { storage } from '@/lib/storage'
 import { verifyToken } from '@/lib/auth'
+import crypto from 'crypto'
 
 export async function GET(request: NextRequest) {
   try {
-    await connectDB()
-
-    const categories = await Category.find().sort({ createdAt: -1 })
-
+    const categories = storage.getCategories()
     return NextResponse.json({ success: true, data: categories })
   } catch (error) {
     console.error('Categories fetch error:', error)
@@ -25,15 +22,17 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    await connectDB()
-
     const { name, description, color } = await request.json()
 
-    const category = await Category.create({
+    const category = {
+      id: crypto.randomUUID(),
       name,
-      description,
-      color,
-    })
+      slug: name.toLowerCase().replace(/\s+/g, '-'),
+      description: description || '',
+      color: color || '#0ea5e9',
+    }
+
+    storage.addCategory(category)
 
     return NextResponse.json({ success: true, data: category }, { status: 201 })
   } catch (error) {
